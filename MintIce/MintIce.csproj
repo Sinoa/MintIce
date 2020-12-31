@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Version>0.0.1</Version>
+    <Authors>Sinoa</Authors>
+    <Description>Discord bot application framework.</Description>
+    <Copyright>(c) 2021 Sinoa</Copyright>
+    <PackageLicenseExpression>Zlib</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Sinoa/MintIce</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Sinoa/MintIce</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <PackageTags>Discord,Framework</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DefineConstants></DefineConstants>
+  </PropertyGroup>
+
+</Project>
