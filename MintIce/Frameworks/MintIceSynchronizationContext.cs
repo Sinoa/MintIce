@@ -13,12 +13,111 @@
 // 2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 
+using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Sinoalmond.MintIce.Frameworks
 {
     public sealed class MintIceSynchronizationContext : SynchronizationContext
     {
-        private readonly ManualResetEvent messageWaitHandle;
+        private readonly object syncObject;
+        private readonly int myThreadId;
+        private Queue<Message> frontMessageQueue;
+        private Queue<Message> backMessageQueue;
+
+
+
+        public MintIceSynchronizationContext(out Action messagePumpHandler)
+        {
+            syncObject = new object();
+            frontMessageQueue = new Queue<Message>();
+            backMessageQueue = new Queue<Message>();
+            myThreadId = Thread.CurrentThread.ManagedThreadId;
+            messagePumpHandler = ProcessMessage;
+        }
+
+
+        public override void Send(SendOrPostCallback d, object state)
+        {
+            if (Thread.CurrentThread.ManagedThreadId == myThreadId)
+            {
+                d(state);
+                return;
+            }
+
+            var waitHandle = new ManualResetEvent(false);
+            EnqueueMessage(new Message(d, state, waitHandle));
+            waitHandle.WaitOne();
+        }
+
+
+        public override void Post(SendOrPostCallback d, object state)
+        {
+            EnqueueMessage(new Message(d, state, null));
+        }
+
+
+        private void EnqueueMessage(in Message message)
+        {
+            lock (syncObject)
+            {
+                backMessageQueue.Enqueue(message);
+            }
+        }
+
+
+        private void ProcessMessage()
+        {
+            var frontMessageQueue = SwitchQueue();
+            while (frontMessageQueue.Count > 0)
+            {
+                frontMessageQueue.Dequeue().Invoke();
+            }
+        }
+
+
+        private Queue<Message> SwitchQueue()
+        {
+            lock (syncObject)
+            {
+                var x = frontMessageQueue;
+                frontMessageQueue = backMessageQueue;
+                backMessageQueue = x;
+            }
+
+            return frontMessageQueue;
+        }
+
+
+
+        private readonly struct Message
+        {
+            private readonly ManualResetEvent waitHandle;
+            private readonly SendOrPostCallback callback;
+            private readonly object state;
+
+
+
+            public Message(SendOrPostCallback callback, object state, ManualResetEvent waitHandle)
+            {
+                this.waitHandle = waitHandle;
+                this.callback = callback;
+                this.state = state;
+            }
+
+
+            public void Invoke()
+            {
+                try
+                {
+                    callback(state);
+                }
+                finally
+                {
+                    waitHandle?.Set();
+                }
+            }
+        }
     }
 }
