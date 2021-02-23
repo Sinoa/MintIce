@@ -19,22 +19,24 @@ using System.Threading;
 
 namespace Sinoalmond.MintIce.Frameworks
 {
-    public sealed class MintIceSynchronizationContext : SynchronizationContext
+    internal sealed class MintIceSynchronizationContext : SynchronizationContext
     {
         private readonly object syncObject;
         private readonly int myThreadId;
+        private readonly ManualResetEvent messageWaitHandler;
         private Queue<Message> frontMessageQueue;
         private Queue<Message> backMessageQueue;
 
 
 
-        public MintIceSynchronizationContext(out Action messagePumpHandler)
+        public MintIceSynchronizationContext(out Action processMessageHandler)
         {
             syncObject = new object();
             frontMessageQueue = new Queue<Message>();
             backMessageQueue = new Queue<Message>();
+            messageWaitHandler = new ManualResetEvent(false);
             myThreadId = Thread.CurrentThread.ManagedThreadId;
-            messagePumpHandler = ProcessMessage;
+            processMessageHandler = ProcessMessage;
         }
 
 
@@ -63,13 +65,35 @@ namespace Sinoalmond.MintIce.Frameworks
             lock (syncObject)
             {
                 backMessageQueue.Enqueue(message);
+                messageWaitHandler.Set();
             }
         }
 
 
-        private void ProcessMessage()
+        private void SwitchQueue()
         {
-            var frontMessageQueue = SwitchQueue();
+            lock (syncObject)
+            {
+                var x = frontMessageQueue;
+                frontMessageQueue = backMessageQueue;
+                backMessageQueue = x;
+
+                if (frontMessageQueue.Count == 0)
+                {
+                    messageWaitHandler.Reset();
+                }
+            }
+        }
+
+
+        private void WaitMessage()
+        {
+            messageWaitHandler.WaitOne();
+        }
+
+
+        private void ProcessFrontMessageAll()
+        {
             while (frontMessageQueue.Count > 0)
             {
                 frontMessageQueue.Dequeue().Invoke();
@@ -77,16 +101,11 @@ namespace Sinoalmond.MintIce.Frameworks
         }
 
 
-        private Queue<Message> SwitchQueue()
+        private void ProcessMessage()
         {
-            lock (syncObject)
-            {
-                var x = frontMessageQueue;
-                frontMessageQueue = backMessageQueue;
-                backMessageQueue = x;
-            }
-
-            return frontMessageQueue;
+            SwitchQueue();
+            WaitMessage();
+            ProcessFrontMessageAll();
         }
 
 
